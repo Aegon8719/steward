@@ -5,6 +5,7 @@
 //! M1 adds application scanning (Windows-first) and `nucleo`-based fuzzy
 //! matching with usage-frequency weighting.
 
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::path::PathBuf;
 
@@ -82,10 +83,20 @@ impl Engine {
     /// when usage is unknown.
     pub fn query(&self, query: &str, freq: &dyn Fn(&str) -> u32) -> Vec<AppEntry> {
         // nucleo's default config is case-insensitive with latin normalization,
-        // which is well suited to launcher search.
+        // which is well suited to launcher search. It only normalizes the
+        // haystack though, so the needle has to be case-folded here (as the
+        // plugin router does): a mixed-case needle otherwise misses on
+        // non-ASCII haystacks and trips nucleo's ASCII prefilter assertion.
+        // Borrow the query when it is already lower case so the common
+        // per-keystroke path stays allocation-free.
+        let query: Cow<'_, str> = if query.chars().any(char::is_uppercase) {
+            Cow::Owned(query.to_lowercase())
+        } else {
+            Cow::Borrowed(query)
+        };
         let mut matcher = self.matcher.borrow_mut();
         let mut needle_buf = Vec::new();
-        let needle = Utf32Str::new(query, &mut needle_buf);
+        let needle = Utf32Str::new(&query, &mut needle_buf);
         let haystacks = self.haystacks.borrow();
 
         let mut scored: Vec<ScoredApp> = if query.trim().is_empty() {
@@ -320,6 +331,16 @@ mod tests {
         engine.set_entries(entries());
         // nucleo default config is case-insensitive.
         assert_eq!(engine.query("firefox", &NO_FREQ).len(), 1);
+    }
+
+    #[test]
+    fn mixed_case_query_matches_like_its_lowercase_form() {
+        let mut engine = Engine::new();
+        engine.set_entries(entries());
+        // A mixed-case needle used to silently miss (non-ASCII haystack) or
+        // panic inside nucleo's `should have been caught by prefilter` assert.
+        assert_eq!(engine.query("FireFox", &NO_FREQ).len(), 1);
+        assert_eq!(engine.query("Terminl", &NO_FREQ).len(), 1);
     }
 
     #[test]

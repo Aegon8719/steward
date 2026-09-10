@@ -318,6 +318,8 @@ pub(crate) fn spawn_event_poll_task(
         // Background icon extractions for below-the-fold results finish
         // asynchronously; apply them as they arrive.
         drain_icon_batches(&state, cx);
+        #[cfg(target_os = "windows")]
+        crate::quick_switch::poll(&state, i18n.clone(), cx);
 
         while let Ok(event) = hotkey_events.try_recv() {
             if event.state != HotKeyState::Pressed {
@@ -393,7 +395,15 @@ pub(crate) fn spawn_event_poll_task(
                             // foreground while the user is still typing into
                             // the launcher. Detached plugin-view windows are
                             // independent and are never hidden here.
-                            if foreground != hwnd && !platform::cursor_hits_window(hwnd) {
+                            // The picker follows its dialog through its own
+                            // session poll, including returning focus to that
+                            // dialog after editing a directory query.
+                            let picker_attached =
+                                state.borrow().quick_switch.borrow().target.is_some();
+                            if !picker_attached
+                                && foreground != hwnd
+                                && !platform::cursor_hits_window(hwnd)
+                            {
                                 if let Some(handle) = state.borrow().window {
                                     let _ =
                                         handle.update(cx, |_, window, cx| hide_window(window, cx));

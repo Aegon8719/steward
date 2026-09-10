@@ -140,6 +140,8 @@ type PluginScan = (ScanReport, Vec<PluginMeta>);
 /// time the bar is summoned, and the current result count so the drop-down
 /// height can be computed at show time.
 pub(crate) struct LauncherState {
+    #[cfg(target_os = "windows")]
+    pub(crate) quick_switch: RefCell<crate::quick_switch::QuickSwitch>,
     pub(crate) window: Option<gpui::AnyWindowHandle>,
     pub(crate) settings_window: Option<gpui::AnyWindowHandle>,
     /// Created together with GPUI (a `FocusHandle` can only be allocated from
@@ -241,9 +243,48 @@ pub(crate) struct LauncherState {
 }
 
 impl LauncherState {
+    /// The screen rect of the open/save dialog the directory picker is attached
+    /// to, so the launcher bar can sit flush under it. `None` in the normal
+    /// centred mode (and on platforms without the picker).
+    pub(crate) fn dialog_anchor(&self) -> Option<crate::platform::Rect> {
+        #[cfg(target_os = "windows")]
+        {
+            self.quick_switch
+                .borrow()
+                .target
+                .and_then(|target| target.rect())
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            None
+        }
+    }
+
+    /// Width of the launcher bar in logical px. The directory picker matches the
+    /// width of the dialog it is attached to (so the bar lines up with the
+    /// dialog's edges); every other mode uses the design width.
+    pub(crate) fn width(&self) -> f32 {
+        #[cfg(target_os = "windows")]
+        {
+            self.quick_switch
+                .borrow()
+                .target
+                .and_then(|target| target.logical_width())
+                .unwrap_or(LAUNCHER_WIDTH)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            LAUNCHER_WIDTH
+        }
+    }
+
     /// Total launcher window height for the current result count: the input
     /// bar plus the result drop-down.
     pub(crate) fn height(&self) -> f32 {
+        #[cfg(target_os = "windows")]
+        if self.quick_switch.borrow().target.is_some() {
+            return launcher_height(self.result_count) + crate::quick_switch::STATUS_HEIGHT;
+        }
         let calendar = self.plugin_calendar.borrow();
         if let Some(active) = calendar.as_ref() {
             if !self.is_active_panel_detached() {
@@ -905,11 +946,9 @@ impl gpui::Render for StewardApp {
         let primary = cx.theme().primary;
         let root = div()
             .track_focus(&self.focus_handle)
-            .on_action({
-                // Esc dismisses the launcher. Detached plugin-view windows are
-                // independent and remain open.
-                move |_: &HideWindow, window, cx| hide_window(window, cx)
-            })
+            .on_action(cx.listener(|this, _: &HideWindow, window, cx| {
+                this.dismiss_launcher(window, cx);
+            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_key(event, window, cx);
             }))
@@ -961,7 +1000,7 @@ impl gpui::Render for StewardApp {
                                                             steward_ui_components::palette::MUTED_FOREGROUND,
                                                         ))
                                                         .child(self.i18n.translate(
-                                                            "search-placeholder",
+                                                            self.search_placeholder(),
                                                         )),
                                                 )
                                         } else {
@@ -1005,6 +1044,11 @@ impl gpui::Render for StewardApp {
                             )),
                     )
             })
+            .when_some(self.directory_status(), |this, status| {
+                this.child(div().h(px(24.0)).px_3().text_xs()
+                    .text_color(rgb(steward_ui_components::palette::MUTED_FOREGROUND))
+                    .child(status))
+            })
             .child(drag_strip().h(px(LAUNCHER_MARGIN)));
 
         // One-shot entrance fade: the launcher eases from transparent to its
@@ -1031,6 +1075,55 @@ impl gpui::Render for StewardApp {
 }
 
 impl StewardApp {
+    pub(crate) fn is_directory_picker(&self) -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            self.state.borrow().quick_switch.borrow().target.is_some()
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            false
+        }
+    }
+
+    fn search_placeholder(&self) -> &'static str {
+        if self.is_directory_picker() {
+            "quick-switch-placeholder"
+        } else {
+            "search-placeholder"
+        }
+    }
+
+    fn directory_status(&self) -> Option<String> {
+        #[cfg(target_os = "windows")]
+        {
+            let state = self.state.borrow();
+            let picker = state.quick_switch.borrow();
+            picker.target?;
+            // A bar that does not hold the keyboard advertises the click that
+            // gives it back; once focused it reports the normal search status.
+            let key = if picker.passive {
+                "quick-switch-passive"
+            } else {
+                picker.status.as_str()
+            };
+            Some(self.i18n.translate(key))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            None
+        }
+    }
+
+    fn dismiss_launcher(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        #[cfg(target_os = "windows")]
+        if self.is_directory_picker() {
+            self.cancel_directory_picker(window, cx, true);
+            return;
+        }
+        hide_window(window, cx);
+    }
+
     /// The launcher's generic "pop out" control for the currently displayed
     /// detachable `list` plugin view. Rendered only when [`Self::detachable_list_target`]
     /// is set (exactly one detachable list panel), so the target is
@@ -1330,7 +1423,7 @@ impl StewardApp {
             // this is more robust than relying on action dispatch when the
             // window just went through a drag or was re-activated.
             "escape" => {
-                hide_window(window, cx);
+                self.dismiss_launcher(window, cx);
                 cx.stop_propagation();
             }
             _ => {}
@@ -1343,6 +1436,11 @@ impl StewardApp {
     /// complete arithmetic expression additionally gets a calculator row on
     /// top showing the computed value.
     pub(crate) fn search(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        #[cfg(target_os = "windows")]
+        if self.is_directory_picker() {
+            self.search_directory_picker(window, cx);
+            return;
+        }
         let query = self.input.query.clone();
 
         let mut items: Vec<ResultItem> = Vec::new();
@@ -1493,7 +1591,7 @@ impl StewardApp {
     /// Splice the current plugin rows between the builtin rows and the app
     /// matches, push the merged list to the results view and resize the
     /// window. Used by `search` and by the poll task when a plugin view lands.
-    fn render_merged(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+    pub(crate) fn render_merged(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
         // The displayed calendar survives only while the current query still
         // yields its view: a new search resets `plugin_views` to `None`, so
         // the grid falls back to the row-based list.
@@ -1645,8 +1743,24 @@ impl StewardApp {
         } else {
             launcher_height(count)
         };
+        let height = height
+            + if self.is_directory_picker() {
+                24.0
+            } else {
+                0.0
+            };
         let mut state = self.state.borrow_mut();
         state.result_count = count;
+        #[cfg(target_os = "windows")]
+        if state.quick_switch.borrow().target.is_some() {
+            state.last_applied_height = height;
+            drop(state);
+            // Apply height and the live dialog rectangle in one queued native
+            // resize; GPUI's generic resize can restore an old position/width.
+            crate::window::queue_directory_picker_bounds(&self.state, window, cx);
+            cx.notify();
+            return;
+        }
         // Resize through GPUI's own window API, which runs the native
         // SetWindowPos asynchronously on the foreground executor. A
         // synchronous platform-layer resize while the launcher is visible
@@ -1660,7 +1774,7 @@ impl StewardApp {
         // redundant resizes.
         if (height - state.last_applied_height).abs() > 0.5 {
             state.last_applied_height = height;
-            window.resize(size(px(LAUNCHER_WIDTH), px(height)));
+            window.resize(size(px(state.width()), px(height)));
         }
         cx.notify();
     }
@@ -1669,6 +1783,9 @@ impl StewardApp {
     /// the foreground poll task after the view was stored in the shared state;
     /// never re-invokes plugins.
     pub(crate) fn apply_plugin_views(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        if self.is_directory_picker() {
+            return;
+        }
         self.render_merged(window, cx);
     }
 

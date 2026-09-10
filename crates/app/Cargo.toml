@@ -36,7 +36,10 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = [
     "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
     "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
     "Win32_Graphics_Gdi",
     "Win32_Foundation",
 ] }
@@ -52,6 +55,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_Storage_FileSystem",
     "Win32_UI_Shell",
     "Win32_UI_Input_Ime",
+    "Win32_UI_Input_KeyboardAndMouse",
 ] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 

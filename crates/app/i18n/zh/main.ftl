@@ -23,3 +23,16 @@ settings-theme-amber = 琥珀
 settings-about = 关于
 settings-about-description = Steward —— 快速、低内存占用的启动器与插件平台
 settings-version = 版本
+
+# Automatic directory picker for open/save dialogs
+quick-switch-placeholder = 输入目录路径，或搜索最近访问的目录
+quick-switch-hint = Enter 跳转目录 · Esc 取消
+quick-switch-searching = 正在搜索目录…
+quick-switch-no-results = 未找到目录，可输入完整路径
+quick-switch-navigating = 正在跳转目录…
+quick-switch-directory = 目录
+quick-switch-target-unavailable = 原文件对话框不可用或不受支持，请按 Esc 后重试。
+quick-switch-release-modifiers = 请松开 Ctrl / Alt / Shift 后重试。
+quick-switch-invalid-directory = 目录不存在或无法访问。
+quick-switch-cancelled = 已取消
+quick-switch-passive = 点击搜索框开始输入

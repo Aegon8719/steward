@@ -23,3 +23,16 @@ settings-theme-amber = Bernstein
 settings-about = Über
 settings-about-description = Steward – ein schneller, speicherschonender Launcher und eine Plugin-Plattform
 settings-version = Version
+
+# Automatic directory picker for open/save dialogs
+quick-switch-placeholder = Ordnerpfad eingeben oder letzte Ordner durchsuchen
+quick-switch-hint = Enter: zum Ordner · Esc: abbrechen
+quick-switch-searching = Ordner werden gesucht…
+quick-switch-no-results = Keine Ordner gefunden — vollständigen Pfad eingeben
+quick-switch-navigating = Ordner wird geöffnet…
+quick-switch-directory = Ordner
+quick-switch-target-unavailable = Der ursprüngliche Dialog ist nicht verfügbar oder wird nicht unterstützt. Esc drücken und erneut versuchen.
+quick-switch-release-modifiers = Strg / Alt / Umschalt loslassen und erneut versuchen.
+quick-switch-invalid-directory = Dieser Ordner existiert nicht oder ist nicht zugänglich.
+quick-switch-cancelled = Abgebrochen
+quick-switch-passive = Zum Eingeben in das Suchfeld klicken

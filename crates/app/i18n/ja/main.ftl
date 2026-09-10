@@ -23,3 +23,16 @@ settings-theme-amber = 琥珀
 settings-about = について
 settings-about-description = Steward – 高速で省メモリなランチャーとプラグインプラットフォーム
 settings-version = バージョン
+
+# Automatic directory picker for open/save dialogs
+quick-switch-placeholder = フォルダーのパスを入力、または最近のフォルダーを検索
+quick-switch-hint = Enter：移動 · Esc：キャンセル
+quick-switch-searching = フォルダーを検索中…
+quick-switch-no-results = 見つかりません。完全なパスを入力してください
+quick-switch-navigating = フォルダーに移動中…
+quick-switch-directory = フォルダー
+quick-switch-target-unavailable = 元のダイアログを操作できません。Esc を押して再試行してください。
+quick-switch-release-modifiers = Ctrl / Alt / Shift を離して再試行してください。
+quick-switch-invalid-directory = フォルダーが存在しないか、アクセスできません。
+quick-switch-cancelled = キャンセルしました
+quick-switch-passive = 検索欄をクリックして入力

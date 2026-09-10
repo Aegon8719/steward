@@ -38,6 +38,8 @@ mod launch;
 mod launcher;
 mod platform;
 mod plugin_panel_window;
+#[cfg(target_os = "windows")]
+mod quick_switch;
 mod search_input;
 mod settings;
 mod theme;
@@ -150,6 +152,8 @@ fn main() {
     let state = Rc::new(RefCell::new(LauncherState {
         window: None,
         settings_window: None,
+        #[cfg(target_os = "windows")]
+        quick_switch: RefCell::new(crate::quick_switch::QuickSwitch::new()),
         focus: None,
         result_count: 0,
         scrim_alpha: steward_ui_components::palette::SCRIM_ALPHA,

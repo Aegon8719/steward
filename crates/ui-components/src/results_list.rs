@@ -40,6 +40,12 @@ pub type ConfirmCallback = Rc<dyn Fn(usize, &mut App) -> bool>;
 #[derive(Debug, Clone)]
 pub enum ResultItem {
     App(AppEntry),
+    /// A filesystem directory offered to an open/save dialog.
+    Directory {
+        path: std::path::PathBuf,
+        title: String,
+        subtitle: String,
+    },
     Action {
         title: String,
         subtitle: String,
@@ -178,6 +184,7 @@ fn render_row(
 ) -> impl IntoElement {
     let id = match item {
         ResultItem::App(app) => ElementId::from(app.path.to_string_lossy().into_owned()),
+        ResultItem::Directory { path, .. } => ElementId::from(path.to_string_lossy().into_owned()),
         ResultItem::Action { .. } => ElementId::from(format!("result-action-{index}")),
         ResultItem::Link { .. } => ElementId::from(format!("result-link-{index}")),
         ResultItem::Plugin { .. } => ElementId::from(format!("result-plugin-{index}")),
@@ -240,7 +247,10 @@ fn render_row(
                     .text_size(px(11.0))
                     .child(type_label.to_string()),
             ),
-        ResultItem::Action { title, subtitle } => row
+        ResultItem::Action { title, subtitle }
+        | ResultItem::Directory {
+            title, subtitle, ..
+        } => row
             .child(
                 div()
                     .flex_1()

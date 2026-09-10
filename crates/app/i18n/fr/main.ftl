@@ -23,3 +23,16 @@ settings-theme-amber = Ambre
 settings-about = À propos
 settings-about-description = Steward – un lanceur rapide et économe en mémoire et une plateforme de plugins
 settings-version = Version
+
+# Automatic directory picker for open/save dialogs
+quick-switch-placeholder = Saisir un chemin ou rechercher un dossier récent
+quick-switch-hint = Entrée : ouvrir le dossier · Échap : annuler
+quick-switch-searching = Recherche de dossiers…
+quick-switch-no-results = Aucun dossier trouvé — saisir un chemin complet
+quick-switch-navigating = Accès au dossier…
+quick-switch-directory = Dossier
+quick-switch-target-unavailable = La boîte de dialogue est indisponible ou incompatible. Appuyez sur Échap et réessayez.
+quick-switch-release-modifiers = Relâchez Ctrl / Alt / Maj et réessayez.
+quick-switch-invalid-directory = Ce dossier est introuvable ou inaccessible.
+quick-switch-cancelled = Annulé
+quick-switch-passive = Cliquez dans le champ de recherche pour saisir du texte

@@ -23,3 +23,16 @@ settings-theme-amber = Amber
 settings-about = About
 settings-about-description = Steward — a fast, low-memory launcher and plugin platform
 settings-version = Version
+
+# Automatic directory picker for open/save dialogs
+quick-switch-placeholder = Type a folder path or search recent folders
+quick-switch-hint = Enter: go to folder · Esc: cancel
+quick-switch-searching = Searching folders…
+quick-switch-no-results = No folders found — enter a full path
+quick-switch-navigating = Navigating to folder…
+quick-switch-directory = Folder
+quick-switch-target-unavailable = The original dialog is unavailable or unsupported. Press Esc and try again.
+quick-switch-release-modifiers = Release Ctrl / Alt / Shift and try again.
+quick-switch-invalid-directory = This folder no longer exists or cannot be accessed.
+quick-switch-cancelled = Cancelled
+quick-switch-passive = Click the search box to type

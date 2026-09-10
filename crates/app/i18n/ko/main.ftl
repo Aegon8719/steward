@@ -23,3 +23,16 @@ settings-theme-amber = 앰버
 settings-about = 정보
 settings-about-description = Steward – 빠르고 메모리 사용량이 낮은 런처 및 플러그인 플랫폼
 settings-version = 버전
+
+# Automatic directory picker for open/save dialogs
+quick-switch-placeholder = 폴더 경로 입력 또는 최근 폴더 검색
+quick-switch-hint = Enter: 폴더 이동 · Esc: 취소
+quick-switch-searching = 폴더 검색 중…
+quick-switch-no-results = 폴더가 없습니다. 전체 경로를 입력하세요
+quick-switch-navigating = 폴더로 이동 중…
+quick-switch-directory = 폴더
+quick-switch-target-unavailable = 원래 대화 상자를 사용할 수 없습니다. Esc를 누르고 다시 시도하세요.
+quick-switch-release-modifiers = Ctrl / Alt / Shift를 놓고 다시 시도하세요.
+quick-switch-invalid-directory = 폴더가 없거나 접근할 수 없습니다.
+quick-switch-cancelled = 취소됨
+quick-switch-passive = 검색창을 클릭하여 입력하세요

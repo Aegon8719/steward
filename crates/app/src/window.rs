@@ -14,7 +14,7 @@ use steward_ui_components::{
 };
 
 use crate::config::{
-    HideWindow, CLOSE_ON_HIDE, DEFAULT_ACCENT, LAUNCHER_HEIGHT, LAUNCHER_WIDTH, THEME_COLOR_SETTING,
+    HideWindow, CLOSE_ON_HIDE, DEFAULT_ACCENT, LAUNCHER_HEIGHT, THEME_COLOR_SETTING,
 };
 use crate::i18n::Localization;
 use crate::launch::launch;
@@ -95,7 +95,11 @@ pub(crate) fn open_launcher_window(
     // preserves the identical dark look in both system modes.
     let window_background = WindowBackgroundAppearance::Blurred;
 
-    let bounds = Bounds::centered(None, size(px(LAUNCHER_WIDTH), px(LAUNCHER_HEIGHT)), cx);
+    let bounds = Bounds::centered(
+        None,
+        size(px(state.borrow().width()), px(LAUNCHER_HEIGHT)),
+        cx,
+    );
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -179,6 +183,13 @@ pub(crate) fn open_launcher_window(
             let on_confirm = move |index: usize, cx: &mut App| -> bool {
                 let item = results_for_cb.borrow().get(index).cloned();
                 match item {
+                    Some(ResultItem::Directory { path, .. }) => {
+                        #[cfg(target_os = "windows")]
+                        crate::quick_switch::confirm_directory(&confirm_state, path, cx);
+                        #[cfg(not(target_os = "windows"))]
+                        let _ = path;
+                        false
+                    }
                     // An application: launch it and bump its usage frequency.
                     Some(ResultItem::App(app)) => {
                         let _ = confirm_storage.borrow().upsert_usage(&app.path);
@@ -338,12 +349,45 @@ pub(crate) fn open_launcher_window(
                 // activation (e.g. the user clicks another window). Detached
                 // plugin-view windows live in their own windows and are not
                 // affected by the launcher's activation.
-                let activation_subscription =
-                    cx.observe_window_activation(window, move |_, window, cx| {
+                let activation_subscription = cx.observe_window_activation(
+                    window,
+                    move |app: &mut StewardApp, window, cx| {
                         if !window.is_window_active() {
+                            #[cfg(target_os = "windows")]
+                            {
+                                let (navigating, dialog_focused) = {
+                                    let state = app.state.borrow();
+                                    let picker = state.quick_switch.borrow();
+                                    (
+                                        picker.navigating,
+                                        picker.target.is_some_and(|target| target.is_foreground()),
+                                    )
+                                };
+                                if dialog_focused && !navigating {
+                                    // The dialog took the keyboard back (the user
+                                    // clicked into it): the bar stays attached but
+                                    // waits for a click before typing again.
+                                    app.state.borrow().quick_switch.borrow_mut().passive = true;
+                                    cx.notify();
+                                    return;
+                                }
+                                if !navigating {
+                                    app.cancel_directory_picker(window, cx, false);
+                                }
+                            }
+                            #[cfg(not(target_os = "windows"))]
+                            let _ = app;
                             hide_window(window, cx);
+                        } else {
+                            // Clicking the bar hands it the keyboard without an
+                            // extra shortcut.
+                            #[cfg(target_os = "windows")]
+                            if app.promote_passive_picker() {
+                                cx.notify();
+                            }
                         }
-                    });
+                    },
+                );
                 let results = ResultList::new(delegate, window, cx);
                 let calendar =
                     CalendarView::new(Some(on_calendar_select), Some(on_toggle_pin), window, cx);
@@ -389,6 +433,18 @@ pub(crate) fn toggle_launcher(
     i18n: Rc<Localization>,
     cx: &mut AsyncApp,
 ) {
+    #[cfg(target_os = "windows")]
+    {
+        let handle = state
+            .borrow()
+            .window
+            .and_then(|h| h.downcast::<StewardApp>());
+        if let Some(handle) = handle {
+            let _ = handle.update(cx, |app, window, cx| {
+                app.cancel_directory_picker(window, cx, false)
+            });
+        }
+    }
     let mut state_ref = state.borrow_mut();
     match state_ref.window {
         Some(handle) => {
@@ -397,6 +453,8 @@ pub(crate) fn toggle_launcher(
                 .clone()
                 .expect("focus is initialized together with GPUI");
             let height = state_ref.height();
+            let width = state_ref.width();
+            let anchor = state_ref.dialog_anchor();
             state_ref.last_applied_height = height;
             // Drop the borrow before `handle.update`: the closure re-enters the
             // shared state through `show_window`, which adapts the scrim.
@@ -407,24 +465,27 @@ pub(crate) fn toggle_launcher(
                 } else {
                     // Re-apply the height so a freshly-created window matches
                     // the current result count (mirrors live sizing on search).
-                    platform::resize(window, height);
+                    platform::resize(window, width, height, anchor);
                     focus.focus(window, cx);
-                    show_window(window, cx, state);
+                    show_window(window, cx, state, true);
                 }
             });
         }
         None => {
             drop(state_ref);
-            show_launcher(state, i18n, cx);
+            show_launcher(state, i18n, cx, true);
         }
     }
 }
 
-/// Show the launcher bar, reopening the window first if necessary.
+/// Show the launcher bar, reopening the window first if necessary. `activate`
+/// takes the foreground (hotkey / tray summons); `false` attaches the bar
+/// passively while the dialog it belongs to keeps focus.
 pub(crate) fn show_launcher(
     state: &Rc<RefCell<LauncherState>>,
     i18n: Rc<Localization>,
     cx: &mut AsyncApp,
+    activate: bool,
 ) {
     if state.borrow().window.is_none() {
         let focus = state
@@ -442,14 +503,60 @@ pub(crate) fn show_launcher(
             .clone()
             .expect("focus is initialized together with GPUI");
         let height = state_ref.height();
+        let width = state_ref.width();
+        let anchor = state_ref.dialog_anchor();
         state_ref.last_applied_height = height;
         drop(state_ref);
         let _ = handle.update(cx, |_, window, cx| {
-            platform::resize(window, height);
-            focus.focus(window, cx);
-            show_window(window, cx, state);
+            platform::resize(window, width, height, anchor);
+            if activate {
+                focus.focus(window, cx);
+            }
+            show_window(window, cx, state, activate);
         });
     }
+}
+
+/// Queue native tracking outside GPUI's window update, just like Window::resize.
+#[cfg(target_os = "windows")]
+pub(crate) fn sync_directory_picker_bounds(state: &Rc<RefCell<LauncherState>>, cx: &mut AsyncApp) {
+    let handle = state.borrow().window;
+    let Some(handle) = handle else {
+        return;
+    };
+    let _ = handle.update(cx, |_, window, cx| {
+        queue_directory_picker_bounds(state, window, cx)
+    });
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn queue_directory_picker_bounds(
+    state: &Rc<RefCell<LauncherState>>,
+    window: &Window,
+    cx: &App,
+) {
+    let Some(hwnd) = platform::hwnd(window) else {
+        return;
+    };
+    let handle = state.borrow().window;
+    let hwnd = hwnd as usize;
+    let state = state.clone();
+    cx.foreground_executor()
+        .spawn(async move {
+            // Read fresh state after queued searches/resizes; a session may have
+            // ended or changed dialogs before this task gets its turn.
+            let (height, anchor) = {
+                let state = state.borrow();
+                if state.window != handle {
+                    return;
+                }
+                (state.height(), state.dialog_anchor())
+            };
+            if let Some(anchor) = anchor {
+                platform::sync_dialog_bounds(hwnd as _, height, anchor);
+            }
+        })
+        .detach();
 }
 
 pub(crate) fn hide_window(window: &mut Window, _cx: &mut App) {
@@ -467,7 +574,12 @@ pub(crate) fn hide_window(window: &mut Window, _cx: &mut App) {
     _cx.hide();
 }
 
-fn show_window(window: &mut Window, _cx: &mut App, state: &Rc<RefCell<LauncherState>>) {
+fn show_window(
+    window: &mut Window,
+    _cx: &mut App,
+    state: &Rc<RefCell<LauncherState>>,
+    activate: bool,
+) {
     #[cfg(not(target_os = "windows"))]
     _cx.activate(true);
     // Adapt the scrim to the backdrop while the window is still hidden (the
@@ -475,8 +587,11 @@ fn show_window(window: &mut Window, _cx: &mut App, state: &Rc<RefCell<LauncherSt
     // backdrop the bar darkens toward SCRIM_ALPHA_MAX so the white ink keeps
     // its contrast, while over a dark desktop it stays at the frosted-glass
     // SCRIM_ALPHA. The next paint picks up the new value.
-    let height = state.borrow().height();
-    if let Some(brightness) = platform::show(window, height) {
+    let (width, height, anchor) = {
+        let state = state.borrow();
+        (state.width(), state.height(), state.dialog_anchor())
+    };
+    if let Some(brightness) = platform::show(window, width, height, anchor, activate) {
         state.borrow_mut().scrim_alpha = adaptive_scrim_alpha(brightness);
     }
     // Restart the launcher's entrance animation (fade + slight scale) so each

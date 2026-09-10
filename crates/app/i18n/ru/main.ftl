@@ -23,3 +23,16 @@ settings-theme-amber = Янтарь
 settings-about = О программе
 settings-about-description = Steward — быстрый, экономный по памяти лаунчер и платформа плагинов
 settings-version = Версия
+
+# Automatic directory picker for open/save dialogs
+quick-switch-placeholder = Введите путь или найдите недавнюю папку
+quick-switch-hint = Enter: перейти · Esc: отмена
+quick-switch-searching = Поиск папок…
+quick-switch-no-results = Папки не найдены — введите полный путь
+quick-switch-navigating = Переход к папке…
+quick-switch-directory = Папка
+quick-switch-target-unavailable = Исходный диалог недоступен или не поддерживается. Нажмите Esc и повторите попытку.
+quick-switch-release-modifiers = Отпустите Ctrl / Alt / Shift и повторите попытку.
+quick-switch-invalid-directory = Папка не существует или недоступна.
+quick-switch-cancelled = Отменено
+quick-switch-passive = Нажмите на поле поиска, чтобы начать ввод
